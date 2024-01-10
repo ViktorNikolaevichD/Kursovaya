@@ -144,14 +144,18 @@ namespace Kursovaya
                 comm.Barrier();
 
                 // Удалить из серверной БД данные, которые были удалены в локальной БД
+                foreach (var obj in deletedDb.DeletedСertificates)
+                    db.Certificates.Remove(obj);
+                // Сохранить
+                db.SaveChanges();
+                // Подождать
+                comm.Barrier();
                 foreach (var obj in deletedDb.DeletedDiseases)
                     db.Diseases.Remove(obj);
                 foreach (var obj in deletedDb.DeletedDoctors)
                     db.Doctors.Remove(obj);
                 foreach (var obj in deletedDb.DeletedPatients)
                     db.Patients.Remove(obj);
-                foreach (var obj in deletedDb.DeletedСertificates)
-                    db.Certificates.Remove(obj);
                 // Сохранить
                 db.SaveChanges();
                 // Подождать
@@ -243,5 +247,8 @@ namespace Kursovaya
             // Добавить пациента в локальную БД
             localDb.Patients.Add(patient);
         }
+
+        // Посмотреть список пользователей
+        public static void ListPatien
     }
 }
