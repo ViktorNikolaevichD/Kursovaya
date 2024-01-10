@@ -23,7 +23,7 @@ namespace Kursovaya
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             // Строка подключения к базе данных
-            optionsBuilder.UseSqlServer("Server=localhost;Database=DbCourseWork;Trusted_Connection=True;Encrypt=False;");
+            optionsBuilder.UseSqlServer("Server=localhost;Database=PatientsDb;Trusted_Connection=True;Encrypt=False;");
         }
     }
 }
