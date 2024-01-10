@@ -42,9 +42,10 @@ namespace Kursovaya
                     {
                         Console.Write("Введите команду \ngen - генерация данных;" +
                                                       "\nupdate - обновить БД на сервере;" +
-                                                      "\nclose - закрыть всем пациентам больничные;" +
-                                                      "\nonl - посчитать количество пользователей online;" +
-                                                      "\nmax - найти максимальный возраст менеджеров;" +
+                                                      "\nclose - закрыть пациенту больничный;" +
+                                                      "\nopen - открыть пациенту больничный;" +
+                                                      "\nreg - зарегистрировать пациента;" +
+
                                                       "\nmin - найти минимальный возраст менеджеров;" +
                                                       "\nsum - посчитать количество заявок пользователей;" +
                                                       "\ncreate - генерация базы данных: ");
@@ -163,6 +164,27 @@ namespace Kursovaya
                             {
                                 // Переслать локальные списки БД 0 процессу
                                 comm.Gather(JsonSerializer.Serialize(localDb), 0);
+                            }
+                            break;
+                        case "reg":
+                            // ФИО пациента
+                            string fullName = "";
+                            // Возраст
+                            int age = 0;
+                            if (comm.Rank == 0)
+                            {
+                                Console.Write("Введите ФИО пациента: ");
+                                fullName = Console.ReadLine();
+                                Console.Write("Введите возраст пациента: ");
+                                age = Convert.ToInt32(Console.ReadLine());
+                                Console.WriteLine("Регестрируем пациента");
+                                stopWatch.Restart();
+
+                                // Регистрация пациента
+                                Commands.RegPatient(localDb, addedDb, fullName, age);
+
+                                stopWatch.Stop();
+                                Console.WriteLine("Пациент зарегестрирован");
                             }
                             break;
                         default:

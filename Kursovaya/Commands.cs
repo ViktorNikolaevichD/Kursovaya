@@ -172,14 +172,31 @@ namespace Kursovaya
         {
             // Найти больничный пациента по Id больничного c открытым больничным
             Сertificate? certificate = generalDb.Сertificates.Where(p => p.PatientId == idPatient && p.Condition == "Открыт").FirstOrDefault();
-            // Если больничный нашелся, то закрыть
+            // Если больничный не нашелся, то выйти
             if (certificate != null)
             {
                 Console.WriteLine($"У пациента уже открыт больничный под Id {certificate.Id}");
                 return;
             }
+
+            Patient? patient = generalDb.Patients.Where(p => p.Id == idPatient).FirstOrDefault();
+            // Если пациент не нашелся, то выйти
+            if (patient == null)
+            {
+                Console.WriteLine("Такого пациента нет в базе");
+                return;
+            }
+
+            // Если болезнь не нашлась, то выйти
+            Disease? disease = generalDb.Diseases.Where(p => p.Id == idDisease).FirstOrDefault();
+            if (disease == null)
+            {
+                Console.WriteLine("Такой болезни нет в базе");
+                return;
+            }
+
             // Новый больничный 
-            var newCertificate = new Сertificate
+            Сertificate newCertificate = new Сertificate
             {
                 // Случайный врач
                 DoctorId = generalDb.Doctors[Faker.RandomNumber.Next(0, generalDb.Doctors.Count() - 1)].Id,
@@ -207,5 +224,24 @@ namespace Kursovaya
             }
         }
 
+        // Зарегистрировать пациента
+        public static void RegPatient(LocalDb localDb, AddedDb addedDb, string fullName, int Age)
+        {
+            // Создать объект пациента
+            Patient patient = new Patient 
+            {
+                FullName = fullName,
+                Age = Age
+            };
+            // Добавить пациента в серверную БД, чтобы получить его Id
+            using (var db = new AppDbContext())
+            {
+                db.Patients.Add(patient);
+                db.SaveChanges();
+            }
+            Console.WriteLine(patient.Id);
+            // Добавить пациента в локальную БД
+            localDb.Patients.Add(patient);
+        }
     }
 }
