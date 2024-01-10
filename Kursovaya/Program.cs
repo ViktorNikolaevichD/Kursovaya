@@ -12,10 +12,6 @@ namespace Kursovaya
         {
             MPI.Environment.Run(ref args, comm =>
             {
-                // Переменная для хранения общей БД
-                LocalDb generalDb = new LocalDb();
-                // Объект для хранения добавленных данных в локальную БД
-                AddedDb addedDb = new AddedDb();
                 // Объект для хранения локальной БД
                 LocalDb localDb = new LocalDb();
                 // Предзагрузка базы данных
@@ -51,7 +47,8 @@ namespace Kursovaya
                                                       "\npatients - посмотреть список пациентов;" +
                                                       "\ndoctors - посмотреть список докторов;" +
                                                       "\nds- посмотреть пациентов с определенной болезнью;" +
-                                                      "\ndses - посмотреть список расшифровок болезней: ");
+                                                      "\ndses - посмотреть список расшифровок болезней;" +
+                                                      "\nquit - выйти: ");
                         command = Console.ReadLine();
                     }
 
@@ -64,7 +61,7 @@ namespace Kursovaya
                         case "gen":
                             int count = 0;
                             // Обновление базы перед началом генерации
-                            Commands.UpdateDb(localDb, addedDb, comm);
+                            Commands.UpdateDb(localDb);
                             comm.Barrier();
                             if (comm.Rank == 0)
                             {
@@ -93,7 +90,7 @@ namespace Kursovaya
                                 stopWatch.Restart();
                             }
                             // Обновление БД
-                            Commands.UpdateDb(localDb, addedDb, comm);
+                            Commands.UpdateDb(localDb);
                             comm.Barrier();
                             if (comm.Rank == 0)
                             {
@@ -129,7 +126,7 @@ namespace Kursovaya
                             // Айди болезни для закрытия больничного
                             int idDisease = 0;
                             // Синхронизация БД перед работой
-                            Commands.UpdateDb(localDb, addedDb, comm);
+                            Commands.UpdateDb(localDb);
                             if (comm.Rank == 0)
                             {
                                 Console.Write("Введите айди пациента, которому хотите открыть больничный: ");
@@ -139,37 +136,19 @@ namespace Kursovaya
                                 Console.WriteLine("Открываем больничный");
                                 stopWatch.Restart();
 
-                                // Собрать все БД в 0 процессе
-                                string[] dbases = comm.Gather(JsonSerializer.Serialize(localDb), 0);
-
-                                // Добавить в список в классе врачей
-                                generalDb.Doctors = dbases
-                                            .Select(x => JsonSerializer.Deserialize<LocalDb>(x)!.Doctors)
-                                            .Where(p => p != null)
-                                            .Aggregate((a, b) => a.Concat(b).ToList());
-                                // Добавить в список в классе болезни
-                                generalDb.Diseases = dbases
-                                            .Select(x => JsonSerializer.Deserialize<LocalDb>(x)!.Diseases)
-                                            .Where(p => p != null)
-                                            .Aggregate((a, b) => a.Concat(b).ToList());
-                                // Добавить в список в классе пациентов
-                                generalDb.Patients = dbases
-                                            .Select(x => JsonSerializer.Deserialize<LocalDb>(x)!.Patients)
-                                            .Where(p => p != null)
-                                            .Aggregate((a, b) => a.Concat(b).ToList());
-                                // Добавить в список в классе больничные
-                                generalDb.Сertificates = dbases
-                                            .Select(x => JsonSerializer.Deserialize<LocalDb>(x)!.Сertificates)
-                                            .Where(p => p != null)
-                                            .Aggregate((a, b) => a.Concat(b).ToList());
                                 // Открытие больничного
-                                Commands.OpenCertif(localDb, generalDb, idPatient, idDisease);
-                                stopWatch.Stop();
+                                Commands.OpenCertif(idPatient, idDisease);
                             }
-                            else
+
+                            // Ожидание добавления больничного
+                            comm.Barrier();
+                            // Обновление локальной БД
+                            localDb = Commands.LoadingDb(comm.Rank, comm.Size);
+                            comm.Barrier();
+                            if (comm.Rank == 0)
                             {
-                                // Переслать локальные списки БД 0 процессу
-                                comm.Gather(JsonSerializer.Serialize(localDb), 0);
+                                stopWatch.Stop();
+                                Console.WriteLine($"Новый больничный открыт");
                             }
                             break;
                         // Зарегистрировать пациента
@@ -403,8 +382,21 @@ namespace Kursovaya
                             }
                             break;
                         default:
+                            if (comm.Rank == 0 && command != "quit")
+                                Console.WriteLine("Неизвестная команда");
                             break;
                     }
+                    if (comm.Rank == 0)
+                    {
+                        // Вывод времени выполнения
+                        TimeSpan ts = stopWatch.Elapsed;
+                        string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}",
+                        ts.Hours, ts.Minutes, ts.Seconds,
+                        ts.Milliseconds / 10);
+                        Console.WriteLine($"RunTime {comm.Rank} " + elapsedTime);
+                    }
+                    // Барьер, чтобы все процессы подождали, пока 0 процесс выведет время работы
+                    comm.Barrier();
                 }
             });
         }

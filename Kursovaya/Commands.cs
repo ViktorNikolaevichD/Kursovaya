@@ -70,7 +70,7 @@ namespace Kursovaya
                 List<Patient> patients = new List<Patient> { };
 
                 // Заполнение БД случайными данными
-                for (int i = 0; i < count; i++)
+                for (int i = 0; i < count / 100 + 1; i++)
                 {
                     // Генерация случайных болезней
                     db.Diseases.Add(new Disease
@@ -79,7 +79,7 @@ namespace Kursovaya
                         Decoding = Faker.Name.Last()
                     });
 
-                    // Генерация случайных враче
+                    // Генерация случайных врачей
                     db.Doctors.Add(new Doctor
                     {
                         FullName = Faker.Name.FullName(),
@@ -125,30 +125,14 @@ namespace Kursovaya
         }
 
         // Обновить БД
-        public static void UpdateDb(LocalDb localDb, AddedDb addedDb, Intracommunicator comm)
+        public static void UpdateDb(LocalDb localDb)
         {
             using (var db = new AppDbContext())
             {
-                // Добавить в серверную БД данные из локальной БД
-                db.Diseases.AddRange(addedDb.AddedDiseases);
-                db.Doctors.AddRange(addedDb.AddedDoctors);
-                db.Patients.AddRange(addedDb.AddedPatients);
-                // Сохранить
-                db.SaveChanges();
-                // Подождать
-                comm.Barrier();
-                db.Certificates.AddRange(addedDb.AddedСertificates);
-                // Сохранить
-                db.SaveChanges();
-                // Подождать
-                comm.Barrier();
-
-
                 // Обновить измененные значения
-                /*db.Diseases.UpdateRange(localDb.Diseases);
+                db.Diseases.UpdateRange(localDb.Diseases);
                 db.Doctors.UpdateRange(localDb.Doctors);
                 db.Patients.UpdateRange(localDb.Patients);
-                db.SaveChanges();*/
                 db.Certificates.UpdateRange(localDb.Сertificates);
                 // Сохранить
                 db.SaveChanges();
@@ -156,70 +140,63 @@ namespace Kursovaya
         }
 
         // Открыть больничный пациенту (работает 0 процесс)
-        public static void OpenCertif(LocalDb localDb, LocalDb generalDb, int idPatient, int idDisease)
+        public static void OpenCertif(int idPatient, int idDisease)
         {
-            // Найти больничный пациента по Id больничного c открытым больничным
-            Certificate? certificate = generalDb.Сertificates.Where(p => p.PatientId == idPatient && p.Condition == "Открыт").FirstOrDefault();
-            // Если больничный не нашелся, то выйти
-            if (certificate != null)
+            using (var db = new AppDbContext())
             {
-                Console.WriteLine($"У пациента уже открыт больничный под Id {certificate.Id}");
-                return;
-            }
+                // Найти больничный пациента по Id больничного c открытым больничным
+                Certificate? certificate = db.Certificates.Where(p => p.PatientId == idPatient && p.Condition == "Открыт").FirstOrDefault();
+                // Если больничный не нашелся, то выйти
+                if (certificate != null)
+                {
+                    Console.WriteLine($"У пациента уже открыт больничный под Id {certificate.Id}");
+                    return;
+                }
 
-            // Вначале ищется пациент в локальной БД, чтобы правильно отслеживать уже существующий объект
-            Patient? patient = localDb.Patients.Where(p => p.Id == idPatient).FirstOrDefault(); 
-            if (patient == null)
-            {
-                patient = generalDb.Patients.Where(p => p.Id == idPatient).FirstOrDefault();
+                // Ищем пациента в БД
+                Patient? patient = db.Patients.Where(p => p.Id == idPatient).FirstOrDefault();
                 // Если пациент не нашелся, то выйти
                 if (patient == null)
                 {
                     Console.WriteLine("Такого пациента нет в базе");
                     return;
                 }
-            }
 
-            // Вначале ищется болезнь в локальной БД, чтобы правильно отслеживать уже существующий объект
-            Disease? disease = localDb.Diseases.Where(p => p.Id == idDisease).FirstOrDefault();
-            if (disease == null)
-            {
+
+                // Вначале ищется болезнь в локальной БД, чтобы правильно отслеживать уже существующий объект
+                Disease? disease = db.Diseases.Where(p => p.Id == idDisease).FirstOrDefault();
                 // Если болезнь не нашлась, то выйти
-                disease = generalDb.Diseases.Where(p => p.Id == idDisease).FirstOrDefault();
                 if (disease == null)
                 {
                     Console.WriteLine("Такой болезни нет в базе");
                     return;
                 }
-            }
 
-            // Случайный врач. Выбирается случайный доктор из общей базы, потом проверяется локальной базе 0 процесса, чтобы взять его оттуда
-            Doctor doctor = generalDb.Doctors[Faker.RandomNumber.Next(0, generalDb.Doctors.Count() - 1)];
-            Doctor? localDoctor = localDb.Doctors.Where(p => p.Id == doctor.Id).FirstOrDefault();
-            // Если нашелся в локальной базе, то нужно взять его
-            if (localDoctor != null)
-                doctor = localDoctor;
-
-            // Новый больничный 
-            Certificate newCertificate = new Certificate
-            {
                 // Случайный врач
-                DoctorId = doctor.Id,
-                PatientId = patient.Id,
-                DiseaseId = disease.Id,
-                Condition = "Открыт"
-            };
+                List<Doctor> doctors = db.Doctors.ToList();
+                Doctor? doctor = doctors[Faker.RandomNumber.Next(0, doctors.Count() - 1)];
 
-            using (var db = new AppDbContext())
-            {
+
+                // Если не нашелся, выйти
+                if (doctor == null)
+                {
+                    Console.WriteLine("Врача не нашлось");
+                    return;
+                }
+
+                // Новый больничный 
+                Certificate newCertificate = new Certificate
+                {
+                    // Случайный врач
+                    DoctorId =  doctor.Id,
+                    PatientId = patient.Id,
+                    DiseaseId = disease.Id,
+                    Condition = "Открыт"
+                };
+
                 db.Certificates.Add(newCertificate);
                 db.SaveChanges();
-            }
-            
-            // Добавить в локальную базу 0 процесса новый больничный
-            localDb.Сertificates.Add(newCertificate);
-
-            Console.WriteLine($"Новый больничный открыт");
+            }                                                                                    
         } 
 
         // Закрыть больничный пациента
