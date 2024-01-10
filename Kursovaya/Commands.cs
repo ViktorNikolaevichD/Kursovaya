@@ -114,5 +114,38 @@ namespace Kursovaya
                 db.SaveChanges();
             }
         }
+        // Обновить БД
+        public static void UpdateDb(LocalDb localDb, AddedDb addedDb, DeletedDb deletedDb)
+        {
+            using (var db = new AppDbContext())
+            {
+                // Добавить в серверную БД данные из локальной БД
+                db.Diseases.AddRange(addedDb.AddedDiseases);
+                db.Doctors.AddRange(addedDb.AddedDoctors);
+                db.Patients.AddRange(addedDb.AddedPatients);
+                db.Certificates.AddRange(addedDb.AddedСertificates);
+                // Сохранить
+                db.SaveChanges();
+
+                // Удалить из серверной БД данные, которые были удалены в локальной БД
+                foreach (var obj in deletedDb.DeletedDiseases)
+                    db.Diseases.Remove(obj);
+                foreach (var obj in deletedDb.DeletedDoctors)
+                    db.Doctors.Remove(obj);
+                foreach (var obj in deletedDb.DeletedPatients)
+                    db.Patients.Remove(obj);
+                foreach (var obj in deletedDb.DeletedСertificates)
+                    db.Certificates.Remove(obj);
+                // Сохранить
+                db.SaveChanges();
+
+                // Обновить измененные значения
+                db.Diseases.UpdateRange(localDb.Diseases);
+                db.Doctors.UpdateRange(localDb.Doctors);
+                db.Patients.UpdateRange(localDb.Patients); 
+                db.Certificates.UpdateRange(localDb.Сertificates);
+            }
+        }
+
     }
 }

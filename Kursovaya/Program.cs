@@ -9,9 +9,9 @@ namespace Kursovaya
             MPI.Environment.Run(ref args, comm =>
             {
                 // Объект для хранения добавленных данных в локальную БД
-                AddedDb added= new AddedDb();
+                AddedDb addedDb = new AddedDb();
                 // Объект для хранения удаленных данных из локальной БД
-                DeletedDb deleted = new DeletedDb();
+                DeletedDb deletedDb = new DeletedDb();
                 // Объект для хранения локальной БД
                 LocalDb localDb = new LocalDb();
                 // Предзагрузка базы данных
@@ -54,11 +54,12 @@ namespace Kursovaya
 
                     switch (command)
                     {
+                        // Генерация данных
                         case "gen":
                             int count = 0;
                             if (comm.Rank == 0)
                             {
-                                Console.Write("Введите количество строк для генерации");
+                                Console.Write("Введите количество строк для генерации: ");
                                 count = Convert.ToInt32(Console.ReadLine());
                                 stopWatch.Restart();
                                 // Генерация данных
@@ -73,6 +74,22 @@ namespace Kursovaya
                             {
                                 stopWatch.Stop();
                                 Console.WriteLine("Данные сгенерированы");
+                            }
+                            break;
+                        // Обновление БД
+                        case "update":
+                            if (comm.Rank == 0)
+                            {
+                                Console.WriteLine("Обновляем БД");
+                                stopWatch.Restart();
+                            }
+                            // Обновление БД
+                            Commands.UpdateDb(localDb, addedDb, deletedDb);
+                            comm.Barrier();
+                            if (comm.Rank == 0)
+                            {
+                                stopWatch.Stop();
+                                Console.WriteLine("БД успешно обновлена");
                             }
                             break;
                         default:
