@@ -7,6 +7,6 @@ namespace Kursovaya
         public List<Disease> AddedDiseases { get; set; } = new List<Disease> { };
         public List<Doctor> AddedDoctors { get; set; } = new List<Doctor> { };
         public List<Patient> AddedPatients { get; set; } = new List<Patient> { };
-        public List <Сertificate> AddedСertificates { get; set; } = new List<Сertificate> { };
+        public List <Certificate> AddedСertificates { get; set; } = new List<Certificate> { };
     }
 }

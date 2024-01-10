@@ -42,8 +42,8 @@ namespace Kursovaya
                             .ToList(),
                     // Список пациентов
                     Patients = db.Patients
-                            .Skip(offsetCertificate)
-                            .Take(partCertificate)
+                            .Skip(offsetPatient)
+                            .Take(partPatient)
                             .ToList(),
                     // Список медицинских справок
                     Сertificates = db.Certificates
@@ -109,7 +109,7 @@ namespace Kursovaya
                     // Если пациенты закончились
                     if (patients.Count() < 1) break;
                     int patientId = Faker.RandomNumber.Next(0, patients.Count() - 1);
-                    db.Certificates.Add(new Сertificate
+                    db.Certificates.Add(new Certificate
                     { 
                         DoctorId = doctors[Faker.RandomNumber.Next(0, doctors.Count() - 1)].Id,
                         PatientId = patients[patientId].Id,
@@ -125,7 +125,7 @@ namespace Kursovaya
         }
 
         // Обновить БД
-        public static void UpdateDb(LocalDb localDb, AddedDb addedDb, DeletedDb deletedDb, Intracommunicator comm)
+        public static void UpdateDb(LocalDb localDb, AddedDb addedDb, Intracommunicator comm)
         {
             using (var db = new AppDbContext())
             {
@@ -143,28 +143,12 @@ namespace Kursovaya
                 // Подождать
                 comm.Barrier();
 
-                // Удалить из серверной БД данные, которые были удалены в локальной БД
-                foreach (var obj in deletedDb.DeletedСertificates)
-                    db.Certificates.Remove(obj);
-                // Сохранить
-                db.SaveChanges();
-                // Подождать
-                comm.Barrier();
-                foreach (var obj in deletedDb.DeletedDiseases)
-                    db.Diseases.Remove(obj);
-                foreach (var obj in deletedDb.DeletedDoctors)
-                    db.Doctors.Remove(obj);
-                foreach (var obj in deletedDb.DeletedPatients)
-                    db.Patients.Remove(obj);
-                // Сохранить
-                db.SaveChanges();
-                // Подождать
-                comm.Barrier();
 
                 // Обновить измененные значения
-                db.Diseases.UpdateRange(localDb.Diseases);
+                /*db.Diseases.UpdateRange(localDb.Diseases);
                 db.Doctors.UpdateRange(localDb.Doctors);
-                db.Patients.UpdateRange(localDb.Patients); 
+                db.Patients.UpdateRange(localDb.Patients);
+                db.SaveChanges();*/
                 db.Certificates.UpdateRange(localDb.Сertificates);
                 // Сохранить
                 db.SaveChanges();
@@ -172,10 +156,10 @@ namespace Kursovaya
         }
 
         // Открыть больничный пациенту (работает 0 процесс)
-        public static void OpenCertif(LocalDb localDb, AddedDb addedDb, LocalDb generalDb, int idPatient, int idDisease)
+        public static void OpenCertif(LocalDb localDb, LocalDb generalDb, int idPatient, int idDisease)
         {
             // Найти больничный пациента по Id больничного c открытым больничным
-            Сertificate? certificate = generalDb.Сertificates.Where(p => p.PatientId == idPatient && p.Condition == "Открыт").FirstOrDefault();
+            Certificate? certificate = generalDb.Сertificates.Where(p => p.PatientId == idPatient && p.Condition == "Открыт").FirstOrDefault();
             // Если больничный не нашелся, то выйти
             if (certificate != null)
             {
@@ -183,35 +167,57 @@ namespace Kursovaya
                 return;
             }
 
-            Patient? patient = generalDb.Patients.Where(p => p.Id == idPatient).FirstOrDefault();
-            // Если пациент не нашелся, то выйти
+            // Вначале ищется пациент в локальной БД, чтобы правильно отслеживать уже существующий объект
+            Patient? patient = localDb.Patients.Where(p => p.Id == idPatient).FirstOrDefault(); 
             if (patient == null)
             {
-                Console.WriteLine("Такого пациента нет в базе");
-                return;
+                patient = generalDb.Patients.Where(p => p.Id == idPatient).FirstOrDefault();
+                // Если пациент не нашелся, то выйти
+                if (patient == null)
+                {
+                    Console.WriteLine("Такого пациента нет в базе");
+                    return;
+                }
             }
 
-            // Если болезнь не нашлась, то выйти
-            Disease? disease = generalDb.Diseases.Where(p => p.Id == idDisease).FirstOrDefault();
+            // Вначале ищется болезнь в локальной БД, чтобы правильно отслеживать уже существующий объект
+            Disease? disease = localDb.Diseases.Where(p => p.Id == idDisease).FirstOrDefault();
             if (disease == null)
             {
-                Console.WriteLine("Такой болезни нет в базе");
-                return;
+                // Если болезнь не нашлась, то выйти
+                disease = generalDb.Diseases.Where(p => p.Id == idDisease).FirstOrDefault();
+                if (disease == null)
+                {
+                    Console.WriteLine("Такой болезни нет в базе");
+                    return;
+                }
             }
 
+            // Случайный врач. Выбирается случайный доктор из общей базы, потом проверяется локальной базе 0 процесса, чтобы взять его оттуда
+            Doctor doctor = generalDb.Doctors[Faker.RandomNumber.Next(0, generalDb.Doctors.Count() - 1)];
+            Doctor? localDoctor = localDb.Doctors.Where(p => p.Id == doctor.Id).FirstOrDefault();
+            // Если нашелся в локальной базе, то нужно взять его
+            if (localDoctor != null)
+                doctor = localDoctor;
+
             // Новый больничный 
-            Сertificate newCertificate = new Сertificate
+            Certificate newCertificate = new Certificate
             {
                 // Случайный врач
-                DoctorId = generalDb.Doctors[Faker.RandomNumber.Next(0, generalDb.Doctors.Count() - 1)].Id,
-                PatientId = idPatient,
-                DiseaseId = idDisease,
+                DoctorId = doctor.Id,
+                PatientId = patient.Id,
+                DiseaseId = disease.Id,
                 Condition = "Открыт"
             };
+
+            using (var db = new AppDbContext())
+            {
+                db.Certificates.Add(newCertificate);
+                db.SaveChanges();
+            }
+            
             // Добавить в локальную базу 0 процесса новый больничный
             localDb.Сertificates.Add(newCertificate);
-            // Добавить в добавленные
-            addedDb.AddedСertificates.Add(newCertificate);
 
             Console.WriteLine($"Новый больничный открыт");
         } 
@@ -220,7 +226,7 @@ namespace Kursovaya
         public static void CloseCertif(LocalDb localDb, int idPatient)
         {
             // Найти больничный пациента по Id больничного
-            Сertificate? certificate = localDb.Сertificates.Where(p => p.PatientId == idPatient && p.Condition == "Открыт").FirstOrDefault();
+            Certificate? certificate = localDb.Сertificates.Where(p => p.PatientId == idPatient && p.Condition == "Открыт").FirstOrDefault();
             // Если больничный нашелся, то закрыть
             if (certificate != null) 
             {
@@ -229,7 +235,7 @@ namespace Kursovaya
         }
 
         // Зарегистрировать пациента
-        public static void RegPatient(LocalDb localDb, AddedDb addedDb, string fullName, int Age)
+        public static void RegPatient(LocalDb localDb, string fullName, int Age)
         {
             // Создать объект пациента
             Patient patient = new Patient 
@@ -243,12 +249,22 @@ namespace Kursovaya
                 db.Patients.Add(patient);
                 db.SaveChanges();
             }
-            Console.WriteLine(patient.Id);
             // Добавить пациента в локальную БД
             localDb.Patients.Add(patient);
         }
 
-        // Посмотреть список пользователей
-        public static void ListPatien
+        // Список справок пациента
+        public static List<Certificate> GetCertificates(LocalDb localDb, int idPatient)
+        {
+            // Вернуть справки по id пациента
+            return localDb.Сertificates.Where(p => p.PatientId == idPatient).OrderBy(p => p.Id).ToList();
+        }
+
+        // Список болеющих определенной болезнью
+        public static List<Patient> GetDisease(LocalDb localDb, int idDisease)
+        {
+            // Выбрать список пациентов, которые болеют определенной болезнью
+            return localDb.Сertificates.Where(p => p.DiseaseId == idDisease && p.Condition == "Открыт").Select(p => p.Patient).ToList();
+        }
     }
 }

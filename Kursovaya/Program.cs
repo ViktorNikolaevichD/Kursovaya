@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Linq;
 using System.Text.Json;
+using System.Xml.XPath;
 
 namespace Kursovaya
 {
@@ -11,10 +12,10 @@ namespace Kursovaya
         {
             MPI.Environment.Run(ref args, comm =>
             {
+                // Переменная для хранения общей БД
+                LocalDb generalDb = new LocalDb();
                 // Объект для хранения добавленных данных в локальную БД
                 AddedDb addedDb = new AddedDb();
-                // Объект для хранения удаленных данных из локальной БД
-                DeletedDb deletedDb = new DeletedDb();
                 // Объект для хранения локальной БД
                 LocalDb localDb = new LocalDb();
                 // Предзагрузка базы данных
@@ -63,7 +64,7 @@ namespace Kursovaya
                         case "gen":
                             int count = 0;
                             // Обновление базы перед началом генерации
-                            Commands.UpdateDb(localDb, addedDb, deletedDb, comm);
+                            Commands.UpdateDb(localDb, addedDb, comm);
                             comm.Barrier();
                             if (comm.Rank == 0)
                             {
@@ -92,7 +93,7 @@ namespace Kursovaya
                                 stopWatch.Restart();
                             }
                             // Обновление БД
-                            Commands.UpdateDb(localDb, addedDb, deletedDb, comm);
+                            Commands.UpdateDb(localDb, addedDb, comm);
                             comm.Barrier();
                             if (comm.Rank == 0)
                             {
@@ -126,20 +127,21 @@ namespace Kursovaya
                             // Айди пациента для открытия больничного
                             idPatient = 0;
                             // Айди болезни для закрытия больничного
-                            int idDesease = 0;
+                            int idDisease = 0;
+                            // Синхронизация БД перед работой
+                            Commands.UpdateDb(localDb, addedDb, comm);
                             if (comm.Rank == 0)
                             {
                                 Console.Write("Введите айди пациента, которому хотите открыть больничный: ");
                                 idPatient = Convert.ToInt32(Console.ReadLine());
                                 Console.Write("Введите айди болезни: ");
-                                idDesease = Convert.ToInt32(Console.ReadLine());
+                                idDisease = Convert.ToInt32(Console.ReadLine());
                                 Console.WriteLine("Открываем больничный");
                                 stopWatch.Restart();
 
                                 // Собрать все БД в 0 процессе
                                 string[] dbases = comm.Gather(JsonSerializer.Serialize(localDb), 0);
-                                // Переменная для хранения общей БД
-                                LocalDb generalDb = new LocalDb();
+
                                 // Добавить в список в классе врачей
                                 generalDb.Doctors = dbases
                                             .Select(x => JsonSerializer.Deserialize<LocalDb>(x)!.Doctors)
@@ -161,7 +163,7 @@ namespace Kursovaya
                                             .Where(p => p != null)
                                             .Aggregate((a, b) => a.Concat(b).ToList());
                                 // Открытие больничного
-                                Commands.OpenCertif(localDb, addedDb, generalDb, idPatient, idDesease);
+                                Commands.OpenCertif(localDb, generalDb, idPatient, idDisease);
                                 stopWatch.Stop();
                             }
                             else
@@ -186,17 +188,17 @@ namespace Kursovaya
                                 stopWatch.Restart();
 
                                 // Регистрация пациента
-                                Commands.RegPatient(localDb, addedDb, fullName, age);
+                                Commands.RegPatient(localDb, fullName, age);
 
                                 stopWatch.Stop();
                                 Console.WriteLine("Пациент зарегестрирован");
                             }
                             break;
                         // Посмотреть список пациентов
-                        case "patiens":
+                        case "patients":
                             if (comm.Rank == 0)
                             {
-                                Console.Write("Выводим список пациентов");
+                                Console.WriteLine("Выводим список пациентов");
                                 stopWatch.Restart();
 
                                 // Собрать все списки в 0 процессе
@@ -207,16 +209,16 @@ namespace Kursovaya
                                                         .Select(x => JsonSerializer.Deserialize<List<Patient>>(x)!)
                                                         .Where(p => p != null)
                                                         .Aggregate((a, b) => a.Concat(b).ToList());
-                                
-                                
-                                if (patients.Count < 1)
+
+
+                                if (patients.Count() < 1)
                                 {
                                     stopWatch.Stop();
                                     Console.WriteLine("Список пуст");
                                     break;
                                 }
                                 // Вывести список пациентов
-                                foreach (var patient in patients)
+                                foreach (var patient in patients.OrderBy(p => p.Id))
                                 {
                                     Console.WriteLine($"Id: {patient.Id}, Age: {patient.Age}, FullName: {patient.FullName}");
                                 }
@@ -232,7 +234,7 @@ namespace Kursovaya
                         case "doctors":
                             if (comm.Rank == 0)
                             {
-                                Console.Write("Выводим список врачей");
+                                Console.WriteLine("Выводим список врачей");
                                 stopWatch.Restart();
 
                                 // Собрать все списки в 0 процессе
@@ -245,7 +247,7 @@ namespace Kursovaya
                                                         .Aggregate((a, b) => a.Concat(b).ToList());
 
 
-                                if (doctors.Count < 1)
+                                if (doctors.Count() < 1)
                                 {
                                     stopWatch.Stop();
                                     Console.WriteLine("Список пуст");
@@ -265,10 +267,10 @@ namespace Kursovaya
                             }
                             break;
                         // Посмотреть список расшифровок болезней
-                        case "disease":
+                        case "dses":
                             if (comm.Rank == 0)
                             {
-                                Console.Write("Выводим расшифровок список болезней");
+                                Console.WriteLine("Выводим список расшифровок болезней");
                                 stopWatch.Restart();
 
                                 // Собрать все списки в 0 процессе
@@ -280,8 +282,7 @@ namespace Kursovaya
                                                         .Where(p => p != null)
                                                         .Aggregate((a, b) => a.Concat(b).ToList());
 
-
-                                if (diseases.Count < 1)
+                                if (diseases.Count() < 1)
                                 {
                                     stopWatch.Stop();
                                     Console.WriteLine("Список пуст");
@@ -298,6 +299,107 @@ namespace Kursovaya
                             {
                                 // Переслать локальные списки БД 0 процессу
                                 comm.Gather(JsonSerializer.Serialize(localDb.Diseases.ToList()), 0);
+                            }
+                            break;
+                        // Посмотреть справки пациента
+                        case "certif":
+                            // Айди пациента
+                            idPatient = 0;
+                            if (comm.Rank == 0)
+                            {
+                                Console.Write("Введите Id пациента: ");
+                                idPatient = Convert.ToInt32(Console.ReadLine());
+                            }
+                            // Отправить всем процессам Id пациента
+                            comm.Broadcast(ref idPatient, 0);
+
+                            if (comm.Rank == 0)
+                            {
+                                Console.WriteLine("Выводим список справок");
+                                stopWatch.Restart();
+
+                                // Собрать все списки в 0 процессе
+                                string[] certifList = comm.Gather(JsonSerializer.Serialize(Commands.GetCertificates(localDb, idPatient)), 0);
+
+                                // Превратить данные в единый список
+                                List<Certificate> certifs = certifList
+                                                        .Select(x => JsonSerializer.Deserialize<List<Certificate>>(x)!)
+                                                        .Where(p => p != null)
+                                                        .Aggregate((a, b) => a.Concat(b).ToList());
+
+                                if (certifs.Count() < 1)
+                                {
+                                    stopWatch.Stop();
+                                    Console.WriteLine("Список пуст");
+                                    break;
+                                }
+                                // Вывести список болезней
+                                foreach (var certif in certifs)
+                                {
+                                    // Иногда возникает ошибка отслеживания сущности (при открывании нового больничного и последующем сохранении)
+                                    // и некоторые поля пустые
+                                    string doctor = certif.Doctor is null ? "NoName" : certif.Doctor.FullName;
+                                    string patient = certif.Patient is null ? "NoName" : certif.Patient.FullName;
+
+                                    Console.WriteLine(
+                                        $"Id: {certif.Id}, " +
+                                        $"Doctor: {doctor}, " +
+                                        $"Patient: {patient}, " +
+                                        $"Disease: {certif.DiseaseId}, " +
+                                        $"Condition: {certif.Condition}");
+                                }
+                                stopWatch.Stop();
+                            }
+                            else
+                            {
+                                // Переслать локальные списки БД 0 процессу
+                                comm.Gather(JsonSerializer.Serialize(Commands.GetCertificates(localDb, idPatient)), 0);
+                            }
+                            break;
+                        // Посмотреть пациентов, болеющих определенной болезнью
+                        case "ds":
+                            // Айди болезни
+                            idDisease = 0;
+                            if (comm.Rank == 0)
+                            {
+                                Console.Write("Введите Id болезни: ");
+                                idDisease = Convert.ToInt32(Console.ReadLine());
+                            }
+                            // Отправить всем процессам Id пациента
+                            comm.Broadcast(ref idDisease, 0);
+
+                            if (comm.Rank == 0)
+                            {
+                                Console.WriteLine("Выводим список пациентов");
+                                stopWatch.Restart();
+
+                                // Собрать все списки в 0 процессе
+                                string[] patientList = comm.Gather(JsonSerializer.Serialize(Commands.GetDisease(localDb, idDisease)), 0);
+
+                                // Превратить данные в единый список
+                                List<Patient> patients = patientList
+                                                        .Select(x => JsonSerializer.Deserialize<List<Patient>>(x)!)
+                                                        .Where(p => p != null)
+                                                        .Aggregate((a, b) => a.Concat(b).ToList());
+
+
+                                if (patients.Count() < 1)
+                                {
+                                    stopWatch.Stop();
+                                    Console.WriteLine("Список пуст");
+                                    break;
+                                }
+                                // Вывести список болеющих пациентов
+                                foreach (var patient in patients)
+                                {
+                                    Console.WriteLine($"Id: {patient.Id}, Age: {patient.Age}, FullName: {patient.FullName}");
+                                }
+                                stopWatch.Stop();
+                            }
+                            else
+                            {
+                                // Переслать локальные списки БД 0 процессу
+                                comm.Gather(JsonSerializer.Serialize(Commands.GetDisease(localDb, idDisease)), 0);
                             }
                             break;
                         default:

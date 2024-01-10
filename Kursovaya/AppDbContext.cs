@@ -12,7 +12,7 @@ namespace Kursovaya
         // Таблица диагнозов
         public DbSet<Disease> Diseases { get; set; }
         // Таблица медицинских справок
-        public DbSet<Сertificate>  Certificates { get; set; }
+        public DbSet<Certificate>  Certificates { get; set; }
 
         public AppDbContext()
         {
