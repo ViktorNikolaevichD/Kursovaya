@@ -123,6 +123,7 @@ namespace Kursovaya
                 db.SaveChanges();
             }
         }
+
         // Обновить БД
         public static void UpdateDb(LocalDb localDb, AddedDb addedDb, DeletedDb deletedDb, Intracommunicator comm)
         {
@@ -165,6 +166,7 @@ namespace Kursovaya
                 db.SaveChanges();
             }
         }
+
         // Открыть больничный пациенту (работает 0 процесс)
         public static void OpenCertif(LocalDb localDb, AddedDb addedDb, LocalDb generalDb, int idPatient, int idDisease)
         {
@@ -192,16 +194,18 @@ namespace Kursovaya
 
             Console.WriteLine($"Новый больничный открыт");
         } 
+
         // Закрыть больничный пациента
         public static void CloseCertif(LocalDb localDb, int idPatient)
         {
             // Найти больничный пациента по Id больничного
-            Сertificate? certificate = localDb.Сertificates.Where(p => p.PatientId == idPatient).FirstOrDefault();
+            Сertificate? certificate = localDb.Сertificates.Where(p => p.PatientId == idPatient && p.Condition == "Открыт").FirstOrDefault();
             // Если больничный нашелся, то закрыть
             if (certificate != null) 
             {
                 certificate.Condition = "Закрыт";
             }
         }
+
     }
 }

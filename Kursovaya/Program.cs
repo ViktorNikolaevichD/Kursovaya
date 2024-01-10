@@ -61,6 +61,7 @@ namespace Kursovaya
                             int count = 0;
                             // Обновление базы перед началом генерации
                             Commands.UpdateDb(localDb, addedDb, deletedDb, comm);
+                            comm.Barrier();
                             if (comm.Rank == 0)
                             {
                                 Console.Write("Введите количество строк для генерации: ");
