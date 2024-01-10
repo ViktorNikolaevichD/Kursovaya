@@ -144,8 +144,18 @@ namespace Kursovaya
                 db.Doctors.UpdateRange(localDb.Doctors);
                 db.Patients.UpdateRange(localDb.Patients); 
                 db.Certificates.UpdateRange(localDb.Сertificates);
+                // Сохранить
+                db.SaveChanges();
             }
         }
 
+        // Закрыть всем пациентам больничный
+        public static void CloseCertif(LocalDb localDb)
+        {
+            foreach (var certif in localDb.Сertificates.ToList())
+            {
+                certif.Condition = "Закрыт";
+            }
+        }
     }
 }

@@ -39,8 +39,8 @@ namespace Kursovaya
                     if (comm.Rank == 0)
                     {
                         Console.Write("Введите команду \ngen - генерация данных;" +
-                                                      "\nsoff - установить статус offline;" +
-                                                      "\nage - увеличить возраст пользователей на 1;" +
+                                                      "\nupdate - обновить БД на сервере;" +
+                                                      "\nclose - закрыть всем пациентам больничные;" +
                                                       "\nonl - посчитать количество пользователей online;" +
                                                       "\nmax - найти максимальный возраст менеджеров;" +
                                                       "\nmin - найти минимальный возраст менеджеров;" +
@@ -90,6 +90,20 @@ namespace Kursovaya
                             {
                                 stopWatch.Stop();
                                 Console.WriteLine("БД успешно обновлена");
+                            }
+                            break;
+                        case "close":
+                            if (comm.Rank == 0)
+                            {
+                                Console.WriteLine("Закрываем всем больничные");
+                                stopWatch.Restart();
+                            }
+                            // Закрытие больничных
+                            Commands.CloseCertif(localDb);
+                            if (comm.Rank == 0)
+                            {
+                                stopWatch.Stop();
+                                Console.WriteLine("Больничные успешно закрыты");
                             }
                             break;
                         default:
