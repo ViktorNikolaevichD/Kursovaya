@@ -1,4 +1,6 @@
 ﻿using System.Diagnostics;
+using System.Linq;
+using System.Text.Json;
 
 namespace Kursovaya
 {
@@ -57,6 +59,8 @@ namespace Kursovaya
                         // Генерация данных
                         case "gen":
                             int count = 0;
+                            // Обновление базы перед началом генерации
+                            Commands.UpdateDb(localDb, addedDb, deletedDb, comm);
                             if (comm.Rank == 0)
                             {
                                 Console.Write("Введите количество строк для генерации: ");
@@ -84,7 +88,7 @@ namespace Kursovaya
                                 stopWatch.Restart();
                             }
                             // Обновление БД
-                            Commands.UpdateDb(localDb, addedDb, deletedDb);
+                            Commands.UpdateDb(localDb, addedDb, deletedDb, comm);
                             comm.Barrier();
                             if (comm.Rank == 0)
                             {
@@ -93,17 +97,71 @@ namespace Kursovaya
                             }
                             break;
                         case "close":
+                            // Айди пациента для закрытия больничного
+                            int idPatient = 0;
                             if (comm.Rank == 0)
                             {
-                                Console.WriteLine("Закрываем всем больничные");
+                                Console.Write("Введите айди пациента, которому хотите закрыть больничный: ");
+                                idPatient = Convert.ToInt32(Console.ReadLine());
+                                Console.WriteLine("Закрываем больничный");
                                 stopWatch.Restart();
                             }
-                            // Закрытие больничных
-                            Commands.CloseCertif(localDb);
+                            // Разослать всем процессам id пациента
+                            comm.Broadcast(ref idPatient, 0);
+                            // Закрытие больничного
+                            Commands.CloseCertif(localDb, idPatient);
                             if (comm.Rank == 0)
                             {
                                 stopWatch.Stop();
-                                Console.WriteLine("Больничные успешно закрыты");
+                                Console.WriteLine("Больничный успешно закрыт");
+                            }
+                            break;
+                        case "open":
+                            // Айди пациента для открытия больничного
+                            idPatient = 0;
+                            // Айди болезни для закрытия больничного
+                            int idDesease = 0;
+                            if (comm.Rank == 0)
+                            {
+                                Console.Write("Введите айди пациента, которому хотите открыть больничный: ");
+                                idPatient = Convert.ToInt32(Console.ReadLine());
+                                Console.Write("Введите айди болезни: ");
+                                idDesease = Convert.ToInt32(Console.ReadLine());
+                                Console.WriteLine("Открываем больничный");
+                                stopWatch.Restart();
+
+                                // Собрать все БД в 0 процессе
+                                string[] dbases = comm.Gather(JsonSerializer.Serialize(localDb), 0);
+                                // Переменная для хранения общей БД
+                                LocalDb generalDb = new LocalDb();
+                                // Добавить в список в классе врачей
+                                generalDb.Doctors = dbases
+                                            .Select(x => JsonSerializer.Deserialize<LocalDb>(x)!.Doctors)
+                                            .Where(p => p != null)
+                                            .Aggregate((a, b) => a.Concat(b).ToList());
+                                // Добавить в список в классе болезни
+                                generalDb.Diseases = dbases
+                                            .Select(x => JsonSerializer.Deserialize<LocalDb>(x)!.Diseases)
+                                            .Where(p => p != null)
+                                            .Aggregate((a, b) => a.Concat(b).ToList());
+                                // Добавить в список в классе пациентов
+                                generalDb.Patients = dbases
+                                            .Select(x => JsonSerializer.Deserialize<LocalDb>(x)!.Patients)
+                                            .Where(p => p != null)
+                                            .Aggregate((a, b) => a.Concat(b).ToList());
+                                // Добавить в список в классе больничные
+                                generalDb.Сertificates = dbases
+                                            .Select(x => JsonSerializer.Deserialize<LocalDb>(x)!.Сertificates)
+                                            .Where(p => p != null)
+                                            .Aggregate((a, b) => a.Concat(b).ToList());
+                                // Открытие больничного
+                                Commands.OpenCertif(localDb, addedDb, generalDb, idPatient, idDesease);
+                                stopWatch.Stop();
+                            }
+                            else
+                            {
+                                // Переслать локальные списки БД 0 процессу
+                                comm.Gather(JsonSerializer.Serialize(localDb), 0);
                             }
                             break;
                         default:

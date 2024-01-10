@@ -1,5 +1,6 @@
 ﻿using Kursovaya.Entities;
 using Microsoft.EntityFrameworkCore;
+using MPI;
 
 namespace Kursovaya
 {
@@ -79,43 +80,51 @@ namespace Kursovaya
                     });
 
                     // Генерация случайных враче
-                    db.Doctors.Add(new Doctor 
+                    db.Doctors.Add(new Doctor
                     {
                         FullName = Faker.Name.FullName(),
                         Age = Faker.RandomNumber.Next(27, 75)
                     });
 
-                    // Генерация случайных пациентов
-                    db.Patients.Add(new Patient 
-                    { 
-                        FullName = Faker.Name.FullName(), 
-                        Age = Faker.RandomNumber.Next(18, 85) 
-                    });
-                }
+                    // Случайный пациент
+                    var patient = new Patient
+                    {
+                        FullName = Faker.Name.FullName(),
+                        Age = Faker.RandomNumber.Next(18, 85)
+                    };
+                    // Добавление пациента в БД
+                    db.Patients.Add(patient);
+                    // Добавление пациента в локальный список
+                    patients.Add(patient);
+                }              
                 // Сохранить
                 db.SaveChanges();
 
-                // Получаем все табилцы из БД
+                // Получаем 2 табилцы из БД
                 diseases = db.Diseases.ToList();
                 doctors = db.Doctors.ToList();
-                patients = db.Patients.ToList();
 
                 for (int i = 0; i < count; i++)
                 {
+                    // Если пациенты закончились
+                    if (patients.Count() < 1) break;
+                    int patientId = Faker.RandomNumber.Next(0, patients.Count() - 1);
                     db.Certificates.Add(new Сertificate
                     { 
                         DoctorId = doctors[Faker.RandomNumber.Next(0, doctors.Count() - 1)].Id,
-                        PatientId = patients[Faker.RandomNumber.Next(0, patients.Count() - 1)].Id,
+                        PatientId = patients[patientId].Id,
                         DiseaseId = diseases[Faker.RandomNumber.Next(0, diseases.Count() - 1)].Id,
                         Condition = "Открыт"
                     });
+                    // Удалить пациента, которому выписан больничный
+                    patients.Remove(patients[patientId]);
                 }
                 // Сохранить
                 db.SaveChanges();
             }
         }
         // Обновить БД
-        public static void UpdateDb(LocalDb localDb, AddedDb addedDb, DeletedDb deletedDb)
+        public static void UpdateDb(LocalDb localDb, AddedDb addedDb, DeletedDb deletedDb, Intracommunicator comm)
         {
             using (var db = new AppDbContext())
             {
@@ -123,9 +132,15 @@ namespace Kursovaya
                 db.Diseases.AddRange(addedDb.AddedDiseases);
                 db.Doctors.AddRange(addedDb.AddedDoctors);
                 db.Patients.AddRange(addedDb.AddedPatients);
+                // Сохранить
+                db.SaveChanges();
+                // Подождать
+                comm.Barrier();
                 db.Certificates.AddRange(addedDb.AddedСertificates);
                 // Сохранить
                 db.SaveChanges();
+                // Подождать
+                comm.Barrier();
 
                 // Удалить из серверной БД данные, которые были удалены в локальной БД
                 foreach (var obj in deletedDb.DeletedDiseases)
@@ -138,6 +153,8 @@ namespace Kursovaya
                     db.Certificates.Remove(obj);
                 // Сохранить
                 db.SaveChanges();
+                // Подождать
+                comm.Barrier();
 
                 // Обновить измененные значения
                 db.Diseases.UpdateRange(localDb.Diseases);
@@ -148,13 +165,42 @@ namespace Kursovaya
                 db.SaveChanges();
             }
         }
-
-        // Закрыть всем пациентам больничный
-        public static void CloseCertif(LocalDb localDb)
+        // Открыть больничный пациенту (работает 0 процесс)
+        public static void OpenCertif(LocalDb localDb, AddedDb addedDb, LocalDb generalDb, int idPatient, int idDisease)
         {
-            foreach (var certif in localDb.Сertificates.ToList())
+            // Найти больничный пациента по Id больничного c открытым больничным
+            Сertificate? certificate = generalDb.Сertificates.Where(p => p.PatientId == idPatient && p.Condition == "Открыт").FirstOrDefault();
+            // Если больничный нашелся, то закрыть
+            if (certificate != null)
             {
-                certif.Condition = "Закрыт";
+                Console.WriteLine($"У пациента уже открыт больничный под Id {certificate.Id}");
+                return;
+            }
+            // Новый больничный 
+            var newCertificate = new Сertificate
+            {
+                // Случайный врач
+                DoctorId = generalDb.Doctors[Faker.RandomNumber.Next(0, generalDb.Doctors.Count() - 1)].Id,
+                PatientId = idPatient,
+                DiseaseId = idDisease,
+                Condition = "Открыт"
+            };
+            // Добавить в локальную базу 0 процесса новый больничный
+            localDb.Сertificates.Add(newCertificate);
+            // Добавить в добавленные
+            addedDb.AddedСertificates.Add(newCertificate);
+
+            Console.WriteLine($"Новый больничный открыт");
+        } 
+        // Закрыть больничный пациента
+        public static void CloseCertif(LocalDb localDb, int idPatient)
+        {
+            // Найти больничный пациента по Id больничного
+            Сertificate? certificate = localDb.Сertificates.Where(p => p.PatientId == idPatient).FirstOrDefault();
+            // Если больничный нашелся, то закрыть
+            if (certificate != null) 
+            {
+                certificate.Condition = "Закрыт";
             }
         }
     }
