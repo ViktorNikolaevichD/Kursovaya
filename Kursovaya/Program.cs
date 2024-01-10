@@ -8,7 +8,11 @@ namespace Kursovaya
         {
             MPI.Environment.Run(ref args, comm =>
             {
-                // Создаю объект класса, чтобы он был доступени из всех контекстов
+                // Объект для хранения добавленных данных в локальную БД
+                AddedDb added= new AddedDb();
+                // Объект для хранения удаленных данных из локальной БД
+                DeletedDb deleted = new DeletedDb();
+                // Объект для хранения локальной БД
                 LocalDb localDb = new LocalDb();
                 // Предзагрузка базы данных
                 // Первым загружает базу 0 процесс, чтобы не было проблемы с одновременным созданием базы данных
@@ -34,7 +38,7 @@ namespace Kursovaya
                     // Получение команды от пользователя
                     if (comm.Rank == 0)
                     {
-                        Console.Write("Введите команду \nsave - сохранить базу данных;" +
+                        Console.Write("Введите команду \ngen - генерация данных;" +
                                                       "\nsoff - установить статус offline;" +
                                                       "\nage - увеличить возраст пользователей на 1;" +
                                                       "\nonl - посчитать количество пользователей online;" +
@@ -50,6 +54,27 @@ namespace Kursovaya
 
                     switch (command)
                     {
+                        case "gen":
+                            int count = 0;
+                            if (comm.Rank == 0)
+                            {
+                                Console.Write("Введите количество строк для генерации");
+                                count = Convert.ToInt32(Console.ReadLine());
+                                stopWatch.Restart();
+                                // Генерация данных
+                                Commands.GenerateData(count);
+                            }
+                            // Все процессы ожидают окончания генерации
+                            comm.Barrier();
+                            // Загрузка данных из БД
+                            localDb = Commands.LoadingDb(comm.Rank, comm.Size);
+                            comm.Barrier();
+                            if (comm.Rank == 0)
+                            {
+                                stopWatch.Stop();
+                                Console.WriteLine("Данные сгенерированы");
+                            }
+                            break;
                         default:
                             break;
                     }

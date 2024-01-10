@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Kursovaya.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace Kursovaya
 {
@@ -60,7 +61,57 @@ namespace Kursovaya
         {
             using (var db = new AppDbContext())
             {
+                // Список для хранения болезней
+                List<Disease> diseases = new List<Disease> { };
+                // Список для хранения врачей
+                List<Doctor> doctors = new List<Doctor> { };
+                // Список для хранения пациентов
+                List<Patient> patients = new List<Patient> { };
 
+                // Заполнение БД случайными данными
+                for (int i = 0; i < count; i++)
+                {
+                    // Генерация случайных болезней
+                    db.Diseases.Add(new Disease
+                    {
+                        // Случайные данные для расшифки болезни
+                        Decoding = Faker.Name.Last()
+                    });
+
+                    // Генерация случайных враче
+                    db.Doctors.Add(new Doctor 
+                    {
+                        FullName = Faker.Name.FullName(),
+                        Age = Faker.RandomNumber.Next(27, 75)
+                    });
+
+                    // Генерация случайных пациентов
+                    db.Patients.Add(new Patient 
+                    { 
+                        FullName = Faker.Name.FullName(), 
+                        Age = Faker.RandomNumber.Next(18, 85) 
+                    });
+                }
+                // Сохранить
+                db.SaveChanges();
+
+                // Получаем все табилцы из БД
+                diseases = db.Diseases.ToList();
+                doctors = db.Doctors.ToList();
+                patients = db.Patients.ToList();
+
+                for (int i = 0; i < count; i++)
+                {
+                    db.Certificates.Add(new Сertificate
+                    { 
+                        DoctorId = doctors[Faker.RandomNumber.Next(0, doctors.Count() - 1)].Id,
+                        PatientId = patients[Faker.RandomNumber.Next(0, patients.Count() - 1)].Id,
+                        DiseaseId = diseases[Faker.RandomNumber.Next(0, diseases.Count() - 1)].Id,
+                        Condition = "Открыт"
+                    });
+                }
+                // Сохранить
+                db.SaveChanges();
             }
         }
     }
