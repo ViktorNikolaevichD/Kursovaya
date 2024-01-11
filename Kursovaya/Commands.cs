@@ -69,7 +69,7 @@ namespace Kursovaya
                 List<Patient> patients = new List<Patient> { };
 
                 // Заполнение БД случайными данными
-                for (int i = 0; i < count / 100 + 1; i++)
+                for (int i = 0; i < count; i++)
                 {
                     // Генерация случайных болезней
                     db.Diseases.Add(new Disease
@@ -206,7 +206,7 @@ namespace Kursovaya
             // Если больничный нашелся, то закрыть
             if (certificate != null) 
             {
-                certificate.Condition = "Закрыт";
+                certificate.Condition = "Закрыт";   
             }
         }
 
