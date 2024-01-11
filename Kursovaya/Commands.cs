@@ -1,6 +1,5 @@
 ﻿using Kursovaya.Entities;
 using Microsoft.EntityFrameworkCore;
-using MPI;
 
 namespace Kursovaya
 {

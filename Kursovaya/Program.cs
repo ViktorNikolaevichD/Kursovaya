@@ -1,8 +1,6 @@
 ﻿using Kursovaya.Entities;
 using System.Diagnostics;
-using System.Linq;
 using System.Text.Json;
-using System.Xml.XPath;
 
 namespace Kursovaya
 {
